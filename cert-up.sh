@@ -1,40 +1,50 @@
 #!/bin/bash
 
+export ACME_EAB_KID=""
+export ACME_EAB_HMAC_KEY=""
+export DOMAIN=
+export DNS=dns_dp
+export DNS_SLEEP=120
+export DP_Id=""
+export DP_Key=""
+
+# export SYNO_Scheme="http" # Can be set to HTTPS, defaults to HTTP
+# export SYNO_Hostname="localhost" # Specify if not using on localhost
+# export SYNO_Port="5000" # Port of DSM WebUI, defaults to 5000 for HTTP and 5001 for HTTPS
+export SYNO_Username="DSM_Admin_Username"
+export SYNO_Password="DSM_Admin_Password"
+export SYNO_Certificate="acme.sh certificate" # Description text in Control Panel -> Security -> Certificates
+# export SYNO_Create=1 # defaults to off, this setting is not saved.  By setting to 1 we create the certificate if it's not in DSM
+export SYNO_DID=
+
+
+set -e
+
+export NO_DETECT_SH=1
+
 # path of this script
 BASE_ROOT=$(cd "$(dirname "$0")";pwd)
-# date time
-DATE_TIME=`date +%Y%m%d%H%M%S`
 # base crt path
 CRT_BASE_PATH="/usr/syno/etc/certificate"
-#CRT_BASE_PATH="/Users/carl/Downloads/certificate"
+PKG_CRT_BASE_PATH="/usr/local/etc/certificate"
 ACME_BIN_PATH=${BASE_ROOT}/acme.sh
 TEMP_PATH=${BASE_ROOT}/temp
 CRT_PATH_NAME=`cat ${CRT_BASE_PATH}/_archive/DEFAULT`
 CRT_PATH=${CRT_BASE_PATH}/_archive/${CRT_PATH_NAME}
-
-backupCrt () {
-  echo 'begin backupCrt'
-  BACKUP_PATH=${BASE_ROOT}/backup/${DATE_TIME}
-  mkdir -p ${BACKUP_PATH}
-  cp -r ${CRT_BASE_PATH} ${BACKUP_PATH}
-  echo ${BACKUP_PATH} > ${BASE_ROOT}/backup/latest
-  echo 'done backupCrt'
-  return 0
-}
 
 installAcme () {
   echo 'begin installAcme'
   mkdir -p ${TEMP_PATH}
   cd ${TEMP_PATH}
   echo 'begin downloading acme.sh tool...'
-  ACME_SH_ADDRESS=`curl -L https://raw.githubusercontent.com/andyzhshg/syno-acme/master/acme.sh.address`
+  ACME_SH_ADDRESS='https://github.com/acmesh-official/acme.sh/archive/refs/heads/master.tar.gz'
   SRC_TAR_NAME=acme.sh.tar.gz
   curl -L -o ${SRC_TAR_NAME} ${ACME_SH_ADDRESS}
   SRC_NAME=`tar -tzf ${SRC_TAR_NAME} | head -1 | cut -f1 -d"/"`
   tar zxvf ${SRC_TAR_NAME}
   echo 'begin installing acme.sh tool...'
   cd ${SRC_NAME}
-  ./acme.sh --install --nocron --home ${ACME_BIN_PATH}
+  ./acme.sh --install --nocron --no-profile --home ${ACME_BIN_PATH}
   echo 'done installAcme'
   rm -rf ${TEMP_PATH}
   return 0
@@ -43,71 +53,47 @@ installAcme () {
 generateCrt () {
   echo 'begin generateCrt'
   cd ${BASE_ROOT}
-  source config
   echo 'begin updating default cert by acme.sh tool'
-  source ${ACME_BIN_PATH}/acme.sh.env
-  ${ACME_BIN_PATH}/acme.sh --issue --dns ${DNS} --dnssleep ${DNS_SLEEP} -d "${DOMAIN}" -d "*.${DOMAIN}"
-  ${ACME_BIN_PATH}/acme.sh --installcert -d ${DOMAIN} -d *.${DOMAIN} \
-    --certpath ${CRT_PATH}/cert.pem \
-    --key-file ${CRT_PATH}/privkey.pem \
-    --fullchain-file ${CRT_PATH}/fullchain.pem
-  cd -
+  ${ACME_BIN_PATH}/acme.sh --home ${ACME_BIN_PATH} --register-account --server zerossl --eab-kid "${ACME_EAB_KID}" --eab-hmac-key "${ACME_EAB_HMAC_KEY}" 
+  ${ACME_BIN_PATH}/acme.sh --home ${ACME_BIN_PATH} --force --log --issue --dns ${DNS} --dnssleep ${DNS_SLEEP} -d "${DOMAIN}" -d "*.${DOMAIN}" --server zerossl
+  # ${ACME_BIN_PATH}/acme.sh --home ${ACME_BIN_PATH} --installcert -d ${DOMAIN} -d *.${DOMAIN} \
+  #   --certpath ${CRT_PATH}/cert.pem \
+  #   --key-file ${CRT_PATH}/privkey.pem \
+  #   --fullchain-file ${CRT_PATH}/fullchain.pem
   echo 'done generateCrt'
-  return 0
+  # if [ -s "${CRT_PATH}/cert.pem" ]; then
+  #   echo 'done generateCrt'
+  #   return 0
+  # else
+  #   echo '[ERR] fail to generateCrt'
+  #   exit 1;
+  # fi
 }
 
-updateService () {
-  echo 'begin updateService'
-  echo 'cp cert path to des'
-  /usr/local/bin/python2 ${BASE_ROOT}/crt_cp.py ${CRT_PATH_NAME}
-  echo 'done updateService'
+deployCrt () {
+  echo 'begin deployCrt'
+  ${ACME_BIN_PATH}/acme.sh --home ${ACME_BIN_PATH} --deploy -d "${DOMAIN}" -d "*.${DOMAIN}" --deploy-hook synology_dsm"
+  echo 'end deployCrt'
 }
 
-reloadWebService () {
-  echo 'begin reloadWebService'
-  echo 'reloading new cert...'
-  systemctl reload nginx
-  echo 'done reloadWebService'  
-}
+# updateService () {
+#   echo 'begin updateService'
+#   echo 'cp cert path to des'
+#   /bin/python3 ${BASE_ROOT}/crt_cp.py ${CRT_PATH_NAME}
+#   echo 'done updateService'
+# }
 
-revertCrt () {
-  echo 'begin revertCrt'
-  BACKUP_PATH=${BASE_ROOT}/backup/$1
-  if [ -z "$1" ]; then
-    BACKUP_PATH=`cat ${BASE_ROOT}/backup/latest`
-  fi
-  if [ ! -d "${BACKUP_PATH}" ]; then
-    echo "[ERR] backup path: ${BACKUP_PATH} not found."
-    return 1
-  fi
-  echo "${BACKUP_PATH} ${CRT_BASE_PATH}"
-  cp -rf ${BACKUP_PATH}/certificate/* ${CRT_BASE_PATH}
-  reloadWebService
-  echo 'done revertCrt'
-}
+# reloadWebService () {
+#   echo 'begin reloadWebService'
+#   echo 'reloading new cert...'
+#   /usr/syno/bin/synow3tool --gen-all && /bin/systemctl reload nginx
+#   echo 'done reloadWebService'
+# }
 
-updateCrt () {
-  echo '------ begin updateCrt ------'
-  backupCrt
-  installAcme
-  generateCrt
-  updateService
-  reloadWebService
-  echo '------ end updateCrt ------'
-}
-
-case "$1" in
-  update)
-    echo "begin update cert"
-    updateCrt
-    ;;
-
-  revert)
-    echo "begin revert"
-      revertCrt $2
-      ;;
-
-    *)
-        echo "Usage: $0 {update|revert}"
-        exit 1
-esac
+echo '------ begin updateCrt ------'
+installAcme
+generateCrt
+deployCrt
+# updateService
+# reloadWebService
+echo '------ end updateCrt ------'
