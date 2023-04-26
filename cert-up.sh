@@ -37,7 +37,7 @@ installAcme () {
   mkdir -p ${TEMP_PATH}
   cd ${TEMP_PATH}
   echo 'begin downloading acme.sh tool...'
-  ACME_SH_ADDRESS='https://github.com/acmesh-official/acme.sh/archive/refs/heads/master.tar.gz'
+  ACME_SH_ADDRESS='https://ghproxy.com/https://github.com/acmesh-official/acme.sh/archive/refs/heads/master.tar.gz'
   SRC_TAR_NAME=acme.sh.tar.gz
   curl -L -o ${SRC_TAR_NAME} ${ACME_SH_ADDRESS}
   SRC_NAME=`tar -tzf ${SRC_TAR_NAME} | head -1 | cut -f1 -d"/"`
