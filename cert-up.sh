@@ -72,7 +72,7 @@ generateCrt () {
 
 deployCrt () {
   echo 'begin deployCrt'
-  ${ACME_BIN_PATH}/acme.sh --home ${ACME_BIN_PATH} --deploy -d "${DOMAIN}" -d "*.${DOMAIN}" --deploy-hook synology_dsm"
+  ${ACME_BIN_PATH}/acme.sh --home ${ACME_BIN_PATH} --deploy -d "${DOMAIN}" -d "*.${DOMAIN}" --deploy-hook synology_dsm
   echo 'end deployCrt'
 }
 
